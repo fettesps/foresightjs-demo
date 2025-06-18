@@ -26,20 +26,18 @@ function OnDemandImages() {
   const [showImages, setShowImages] = useState(false);
   const [modalImage, setModalImage] = useState<string | null>(null);
   
-  // Generate 50 images for 10 rows of 5
-  const images = Array.from({ length: 50 }, (_, i) => {
-    // Use a more reliable range of image IDs that exist in Picsum
-    const imageIds = [
-      1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-      22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
-      42, 43, 44, 45, 46, 47, 48, 49, 50, 51
-    ];
-    const imageId = imageIds[i];
-    return {
-      lowRes: `https://picsum.photos/id/${imageId}/200/125`, // Low res for grid
-      highRes: `https://picsum.photos/id/${imageId}/800/500`, // High res for modal
-      id: imageId
-    };
+  // Generate 50 images once and store in state to prevent re-generation on re-renders
+  const [images] = useState(() => {
+    return Array.from({ length: 50 }, (_, i) => {
+      // Use a unique seed for each image to ensure variety but consistency per session
+      const seed = `img-${i + 1}-${Date.now()}-${Math.random()}`;
+      
+      return {
+        lowRes: `https://picsum.photos/seed/${seed}/200/125`, // Low res for grid
+        highRes: `https://picsum.photos/seed/${seed}/800/500`, // High res for modal
+        id: seed
+      };
+    });
   });
 
   const openModal = (highResUrl: string) => {
