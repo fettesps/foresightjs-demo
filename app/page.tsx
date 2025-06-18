@@ -57,53 +57,28 @@ function OnDemandImages() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16, display: "flex", gap: 12 }}>
-        <button onClick={() => setShowImages(true)} disabled={showImages}>
+      <div className={styles.buttonControls}>
+        <button 
+          onClick={() => setShowImages(true)} 
+          disabled={showImages}
+          className={styles.loadButton}
+        >
           {showImages ? "Images Loaded" : "Load Images"}
         </button>
         {showImages && (
-          <button onClick={resetImages} style={{ backgroundColor: "#ff4444", color: "white", border: "none", padding: "8px 16px", borderRadius: "4px", cursor: "pointer" }}>
+          <button onClick={resetImages} className={styles.unloadButton}>
             Unload Images
           </button>
         )}
       </div>
       
       {/* Image Grid */}
-      <div style={{ 
-        display: "grid", 
-        gridTemplateColumns: "repeat(5, 1fr)", 
-        gap: 16,
-        maxWidth: "1200px"
-      }}>
+      <div className={styles.imageGrid}>
         {images.map((image, idx) => (
           <div
             key={image.id}
-            style={{
-              width: "100%",
-              aspectRatio: "8/5",
-              borderRadius: 8,
-              boxShadow: "0 2px 8px #0002",
-              background: "#eee",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-              cursor: showImages ? "pointer" : "default",
-              transition: "transform 0.2s, box-shadow 0.2s"
-            }}
+            className={`${styles.imageBox} ${showImages ? styles.clickable : ''}`}
             onClick={() => showImages && openModal(image.highRes)}
-            onMouseEnter={(e) => {
-              if (showImages) {
-                e.currentTarget.style.transform = "scale(1.05)";
-                e.currentTarget.style.boxShadow = "0 4px 16px #0003";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (showImages) {
-                e.currentTarget.style.transform = "scale(1)";
-                e.currentTarget.style.boxShadow = "0 2px 8px #0002";
-              }
-            }}
           >
             {showImages ? (
               <Image
@@ -111,15 +86,12 @@ function OnDemandImages() {
                 alt={`Image ${idx + 1}`}
                 width={200}
                 height={125}
-                style={{ 
-                  borderRadius: 8,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover"
-                }}
+                className={styles.imageContent}
+                sizes="(max-width: 1200px) 20vw, 240px"
+                priority={false}
               />
             ) : (
-              <span style={{ color: '#aaa', fontSize: 14 }}>Image {idx + 1}</span>
+              <span className={styles.placeholderText}>Image {idx + 1}</span>
             )}
           </div>
         ))}
@@ -127,64 +99,16 @@ function OnDemandImages() {
 
       {/* Modal for high-res images */}
       {modalImage && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: 20
-          }}
-          onClick={closeModal}
-        >
-          <div
-            style={{
-              position: "relative",
-              maxWidth: "90vw",
-              maxHeight: "90vh",
-              borderRadius: 8,
-              overflow: "hidden"
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className={styles.modalOverlay} onClick={closeModal}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <Image
               src={modalImage}
               alt="High resolution image"
               width={800}
               height={500}
-              style={{
-                width: "auto",
-                height: "auto",
-                maxWidth: "100%",
-                maxHeight: "100%",
-                objectFit: "contain"
-              }}
+              className={styles.modalImage}
             />
-            <button
-              onClick={closeModal}
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 10,
-                background: "rgba(0, 0, 0, 0.7)",
-                color: "white",
-                border: "none",
-                borderRadius: "50%",
-                width: 40,
-                height: 40,
-                fontSize: 20,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
+            <button onClick={closeModal} className={styles.closeButton}>
               ×
             </button>
           </div>
