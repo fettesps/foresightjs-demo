@@ -10,8 +10,8 @@ export default function Home() {
     <div className={styles.page}>
       <main className={styles.main}>
         {/* Demo: On-demand image loading */}
-        <div>
-          <h2 className={styles.title}>ForesightJS Image Loading Demo</h2>
+        <div tabIndex={-1}>
+          <h2 className={styles.title} tabIndex={-1}>ForesightJS Image Loading Demo</h2>
           <OnDemandImages />
         </div>
       </main>
@@ -49,23 +49,31 @@ function OnDemandImages() {
   });
 
   const openModal = (highResUrl: string) => {
-    const modalStartTime = performance.now();
     const imageId = images.find(img => img.highRes === highResUrl)?.id;
-    console.log(`🖼️ Opening modal for ${imageId}, prefetched: ${prefetchedImages.has(imageId || '')}`);
+    const isPrefetched = prefetchedImages.has(imageId || '');
+    const isCompleted = prefetchCompleted.has(imageId || '');
     
-    setModalLoading(true);
+    console.log(`🖼️ Opening modal for ${imageId}, prefetched: ${isPrefetched}, completed: ${isCompleted}`);
+    
+    // If image is marked as completed, it should load instantly
+    setModalLoading(!isCompleted);
     setModalImage(highResUrl);
     
-    // Add a load event listener to see if the high-res image loads quickly from cache
+    // Track actual modal load time for verification
+    const trackingStartTime = performance.now();
     const testImg = new (window as any).Image();
     testImg.onload = () => {
-      const modalLoadTime = performance.now() - modalStartTime;
-      console.log(`⚡ Modal high-res image loaded in ${modalLoadTime.toFixed(2)}ms (from ${prefetchedImages.has(imageId || '') ? 'cache' : 'network'})`);
-      setModalLoading(false);
-    };
-    testImg.onerror = () => {
-      console.error(`❌ Failed to load modal image for ${imageId}`);
-      setModalLoading(false);
+      const modalLoadTime = performance.now() - trackingStartTime;
+      
+      if (isCompleted && modalLoadTime < 50) {
+        console.log(`⚡ Modal image loaded instantly in ${modalLoadTime.toFixed(2)}ms as expected`);
+      } else if (isCompleted && modalLoadTime >= 50) {
+        console.log(`⚠️ Modal image took ${modalLoadTime.toFixed(2)}ms despite Ready badge - cache may have been evicted`);
+      } else if (isPrefetched) {
+        console.log(`⏳ Modal image loaded in ${modalLoadTime.toFixed(2)}ms - was still prefetching`);
+      } else {
+        console.log(`🐌 Modal image loaded in ${modalLoadTime.toFixed(2)}ms from network`);
+      }
     };
     testImg.src = highResUrl;
   };
@@ -74,6 +82,27 @@ function OnDemandImages() {
     setModalImage(null);
     setModalLoading(false);
   };
+
+  // Handle keyboard events for modal and scrolling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && modalImage) {
+        closeModal();
+      }
+      
+      // With ForesightJS v2.2+, scroll prediction is handled natively
+      // No need for custom keyboard scroll detection
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [modalImage, foresightEnabled]);
+
+  // ForesightJS v2.2+ handles scroll prediction natively
+  // No need for custom scroll event handling
 
   const resetImages = () => {
     setLoadedImages(new Set());
@@ -92,6 +121,8 @@ function OnDemandImages() {
     }
     setResetKey(prev => prev + 1); // Trigger ForesightJS re-registration
   };
+
+  // ForesightJS v2.2+ handles scroll context internally
 
   // Function to load image when ForesightJS predicts interaction
   const loadImage = (imageId: string) => {
@@ -116,39 +147,54 @@ function OnDemandImages() {
       link.rel = 'preload';
       link.as = 'image';
       link.href = imageUrl;
-      link.crossOrigin = 'anonymous'; // Add CORS support
+      // Remove CORS for Picsum images to avoid cache issues
       link.onload = () => {
         const loadTime = performance.now() - startTime;
         console.log(`✅ ForesightJS: Link preload completed for ${imageId} in ${loadTime.toFixed(2)}ms`);
       };
       document.head.appendChild(link);
       
-      // Method 2: Create Image element with higher priority
+      // Method 2: Create Image element - primary prefetch method
       const img = new (window as any).Image();
-      img.crossOrigin = 'anonymous';
+      // Remove CORS to match modal image loading
       img.onload = () => {
         const loadTime = performance.now() - startTime;
         console.log(`✅ ForesightJS: Image prefetch completed for ${imageId} in ${loadTime.toFixed(2)}ms`);
-        setPrefetchCompleted(prev => new Set([...prev, imageId]));
+        
+        // Test if image is truly cached by trying to load it again immediately
+        const cacheTestStart = performance.now();
+        const cacheTestImg = new (window as any).Image();
+        cacheTestImg.onload = () => {
+          const cacheTestTime = performance.now() - cacheTestStart;
+          console.log(`🧪 ForesightJS: Cache test for ${imageId} took ${cacheTestTime.toFixed(2)}ms`);
+          
+          // If the second load is very fast, it's definitely cached
+          if (cacheTestTime < 20) {
+            console.log(`✅ ForesightJS: Image ${imageId} verified as cached - showing Ready badge`);
+            setPrefetchCompleted(prev => new Set([...prev, imageId]));
+          } else {
+            console.log(`⚠️ ForesightJS: Image ${imageId} cache test slow - keeping Prefetching badge`);
+            // Try one more time after a short delay
+            setTimeout(() => {
+              const finalTestStart = performance.now();
+              const finalTestImg = new (window as any).Image();
+              finalTestImg.onload = () => {
+                const finalTestTime = performance.now() - finalTestStart;
+                if (finalTestTime < 20) {
+                  console.log(`✅ ForesightJS: Image ${imageId} final test passed - showing Ready badge`);
+                  setPrefetchCompleted(prev => new Set([...prev, imageId]));
+                }
+              };
+              finalTestImg.src = imageUrl;
+            }, 500);
+          }
+        };
+        cacheTestImg.src = imageUrl;
       };
       img.onerror = () => {
         console.error(`❌ ForesightJS: Image prefetch failed for ${imageId}`);
       };
       img.src = imageUrl;
-      
-      // Method 3: Use fetch with cache for even more aggressive prefetching
-      fetch(imageUrl, { 
-        method: 'GET',
-        mode: 'cors',
-        cache: 'force-cache'
-      }).then(response => {
-        if (response.ok) {
-          const loadTime = performance.now() - startTime;
-          console.log(`🚀 ForesightJS: Fetch prefetch completed for ${imageId} in ${loadTime.toFixed(2)}ms`);
-        }
-      }).catch(err => {
-        console.warn(`⚠️ ForesightJS: Fetch prefetch failed for ${imageId}:`, err);
-      });
     }
   };
 
@@ -160,13 +206,18 @@ function OnDemandImages() {
     }
 
     console.log('✅ ForesightJS: Enabled and initializing');
+    console.log(`🐛 Debug mode state: ${debugMode} (type: ${typeof debugMode})`);
     
     // Initialize ForesightManager with configuration
-    ForesightManager.initialize({
-      debug: debugMode, // Control debug mode to prevent keyboard interference
+    const config = {
+      debug: debugMode, // Control debug mode properly
       trajectoryPredictionTime: 100, // How far ahead to predict mouse trajectory
       defaultHitSlop: 20, // Extra pixels around elements for prediction
-    });
+      enableScrollPrediction: true, // Enable v2.2+ scroll-based predictions
+    };
+    
+    console.log('🔧 ForesightJS config:', config);
+    ForesightManager.initialize(config);
 
     const unregisterFunctions: (() => void)[] = [];
 
@@ -197,21 +248,30 @@ function OnDemandImages() {
   return (
     <div>
       <div className={styles.buttonControls}>
-        <button onClick={resetImages} className={styles.unloadButton}>
+        <button onClick={resetImages} className={styles.unloadButton} tabIndex={1}>
           Reset All Images
         </button>
         <button 
           onClick={toggleForesight}
           className={`${styles.loadButton} ${foresightEnabled ? styles.enabledButton : styles.disabledButton}`}
+          tabIndex={2}
         >
           ForesightJS: {foresightEnabled ? 'ON' : 'OFF'}
         </button>
         <button 
           onClick={() => setDebugMode(!debugMode)} 
-          className={styles.loadButton}
+          className={`${styles.loadButton} ${debugMode ? styles.enabledButton : styles.disabledButton}`}
+          tabIndex={3}
         >
           Debug Mode: {debugMode ? 'ON' : 'OFF'}
         </button>
+      </div>
+      
+      <div className={styles.keyboardHint} tabIndex={-1}>
+        💡 {foresightEnabled 
+          ? 'ForesightJS predicts your intent - Tab/Shift+Tab to navigate, Enter/Space to interact, scroll to trigger predictions, Escape to close modal'
+          : 'Hover or Tab to load images - Enter/Space to open modal, Escape to close modal'
+        }
       </div>
       
       {/* Image Grid */}
@@ -221,13 +281,65 @@ function OnDemandImages() {
             key={image.id}
             ref={el => { imageRefs.current[idx] = el; }}
             className={`${styles.imageBox} ${loadedImages.has(image.id) ? styles.clickable : (!foresightEnabled ? styles.clickable : '')}`}
+            tabIndex={4 + idx}
+            role="button"
+            aria-label={loadedImages.has(image.id) ? `View high resolution image ${idx + 1}` : `Load image ${idx + 1}`}
+            onMouseEnter={() => {
+              if (!foresightEnabled && !loadedImages.has(image.id)) {
+                // When ForesightJS is disabled, load on hover
+                console.log(`🖱️ Hover: Loading image ${image.id}`);
+                setLoadedImages(prev => new Set([...prev, image.id]));
+                // Also prefetch high-res for faster modal opening
+                setTimeout(() => {
+                  prefetchImage(image.highRes, image.id);
+                }, 100);
+              }
+            }}
             onClick={() => {
               if (loadedImages.has(image.id)) {
-                openModal(image.highRes);
-              } else if (!foresightEnabled) {
-                // When ForesightJS is disabled, allow manual loading by clicking
-                console.log(`📱 Manual: Loading image ${image.id}`);
+                // Check if high-res is prefetched before opening modal
+                if (prefetchCompleted.has(image.id)) {
+                  console.log(`🚀 Quick modal open - image ${image.id} is fully prefetched`);
+                  openModal(image.highRes);
+                } else if (prefetchedImages.has(image.id)) {
+                  console.log(`⏳ Modal opening - image ${image.id} still prefetching...`);
+                  openModal(image.highRes);
+                } else {
+                  console.log(`🐌 Slow modal open - image ${image.id} not prefetched`);
+                  openModal(image.highRes);
+                }
+              }
+              // Remove the manual click loading since we now load on hover when ForesightJS is off
+            }}
+            onFocus={() => {
+              if (!foresightEnabled && !loadedImages.has(image.id)) {
+                // When ForesightJS is disabled, load on focus (keyboard navigation)
+                console.log(`⌨️ Focus: Loading image ${image.id}`);
                 setLoadedImages(prev => new Set([...prev, image.id]));
+                // Also prefetch high-res for faster modal opening
+                setTimeout(() => {
+                  prefetchImage(image.highRes, image.id);
+                }, 100);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (loadedImages.has(image.id)) {
+                  // Check prefetch status for keyboard interaction too
+                  if (prefetchCompleted.has(image.id)) {
+                    console.log(`🚀 Quick keyboard modal open - image ${image.id} is fully prefetched`);
+                  } else if (prefetchedImages.has(image.id)) {
+                    console.log(`⏳ Keyboard modal opening - image ${image.id} still prefetching...`);
+                  } else {
+                    console.log(`🐌 Slow keyboard modal open - image ${image.id} not prefetched`);
+                  }
+                  openModal(image.highRes);
+                } else if (!foresightEnabled) {
+                  // If image isn't loaded yet (shouldn't happen with focus loading), load it
+                  console.log(`⌨️ Keyboard: Loading image ${image.id}`);
+                  setLoadedImages(prev => new Set([...prev, image.id]));
+                }
               }
             }}
           >
@@ -250,7 +362,7 @@ function OnDemandImages() {
               </>
             ) : (
               <span className={styles.placeholderText}>
-                {foresightEnabled ? `Image ${idx + 1}` : `Click to load Image ${idx + 1}`}
+                {foresightEnabled ? `Image ${idx + 1}` : `Hover to load Image ${idx + 1}`}
               </span>
             )}
           </div>
@@ -259,8 +371,19 @@ function OnDemandImages() {
 
       {/* Modal for high-res images */}
       {modalImage && (
-        <div className={styles.modalOverlay} onClick={closeModal}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div 
+          className={styles.modalOverlay} 
+          onClick={closeModal}
+          role="dialog"
+          aria-modal="true"
+          aria-label="High resolution image viewer"
+        >
+          <div 
+            className={styles.modalContent} 
+            onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
+            ref={(el) => el?.focus()}
+          >
             {modalLoading && (
               <div className={styles.modalLoading}>
                 Loading high-res image...
@@ -281,7 +404,11 @@ function OnDemandImages() {
               onLoad={() => setModalLoading(false)}
               onError={() => setModalLoading(false)}
             />
-            <button onClick={closeModal} className={styles.closeButton}>
+            <button 
+              onClick={closeModal} 
+              className={styles.closeButton}
+              aria-label="Close modal"
+            >
               ×
             </button>
           </div>

@@ -36,6 +36,17 @@
   gap: 12px;
 }
 
+.keyboardHint {
+  text-align: center;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 20px;
+  padding: 8px 16px;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 6px;
+  border-left: 4px solid #4CAF50;
+}
+
 .loadButton {
   min-width: 140px;
   padding: 8px 16px;
@@ -99,7 +110,7 @@
   justify-content: center;
   position: relative;
   cursor: default;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: box-shadow 0.2s ease;
 }
 
 .imageBox.clickable {
@@ -107,8 +118,22 @@
 }
 
 .imageBox.clickable:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 16px #0003;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+.imageBox:focus {
+  outline: 4px solid #4CAF50;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 2px white, 0 0 0 6px #4CAF50, 0 4px 20px rgba(76, 175, 80, 0.3);
+  position: relative;
+  z-index: 5;
+}
+
+.imageBox:focus-visible {
+  outline: 4px solid #4CAF50;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 2px white, 0 0 0 6px #4CAF50, 0 4px 20px rgba(76, 175, 80, 0.3);
 }
 
 .imageContent {
